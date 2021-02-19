@@ -9,6 +9,8 @@
 #include "./keytable.c"
 #include "./linkedlist.c"
 
+struct keytable * DYNOBJ_KT;
+
 struct dynobj {
   int keyCount;
   bool isDirty;
@@ -29,11 +31,12 @@ struct linkedkvpair {
   struct linkedkvpair * next;
 };
 
-struct linkedkvpair * object_create_kvpair (struct keytable * kt, char* key, char type) {
+struct linkedkvpair * object_create_kvpair (char* key, char type) {
   struct linkedkvpair * result = (struct linkedkvpair*)  malloc(sizeof(struct linkedkvpair));
   
   //get the hash from the keytable (makes key retrievable, and also efficient for reused keys)
-  result->keyhash = keytable_get_hash(kt, key)->hash;
+  // result->keyhash = keytable_get_hash(kt, key)->hash;
+  result->keyhash = keytable_get_hash(DYNOBJ_KT, key)->hash;
   result->type = type;
   result->next = 0x0; //init to 0 so we don't have weird results
   result->value = 0x0;
@@ -132,8 +135,9 @@ bool object_has_property (struct dynobj * obj, char* key) {
   return n != 0x0;
 }
 
-struct linkedkvpair * object_create_property (struct dynobj * obj, char* key, void* value, char type, struct keytable * kt) {
-  struct linkedkvpair * n = object_create_kvpair(kt, key, type);
+struct linkedkvpair * object_create_property (struct dynobj * obj, char* key, void* value, char type) {
+  struct linkedkvpair * n = object_create_kvpair(key, type);
+  // struct linkedkvpair * n = object_create_kvpair(kt, key, type);
   n->value = value;
   
   //If object has no property, set the new one as the first one
@@ -169,12 +173,11 @@ struct linkedkvpair * object_create_property (struct dynobj * obj, char* key, vo
  * 
  * If createIfNull == false, keytable kt can be set to null / 0 / 0x0 safely
  */
-bool object_set_property (struct dynobj * obj, char* key, void* value, char type, bool createIfNull, struct keytable * kt) {
+bool object_set_property (struct dynobj * obj, char* key, void* value, char type) {
   struct linkedkvpair * n = object_get_property(obj, key);
 
   if (n == 0) {
-    if (!createIfNull) return false;
-    n = object_create_property(obj, key, value, type, kt);
+    n = object_create_property(obj, key, value, type);
     return true;
   }
 
@@ -216,7 +219,7 @@ int object_get_property_count (struct dynobj * obj) {
   
 // }
 
-void object_print_json (struct keytable * kt, struct dynobj * obj, int level, struct lln * visited) {
+void object_print_json (struct dynobj * obj, int level, struct lln * visited) {
   level ++;
   struct linkedkvpair * current = obj->first;
 
@@ -233,7 +236,8 @@ void object_print_json (struct keytable * kt, struct dynobj * obj, int level, st
   while (current != 0) {
     lln_add_value(visited, current);
 
-    currentKey = keytable_get_by_hash(kt, current->keyhash);
+    currentKey = keytable_get_by_hash(DYNOBJ_KT, current->keyhash);
+    // currentKey = keytable_get_by_hash(kt, current->keyhash);
 
     for (int i=0; i<level; i++) {
       printf("  ");
@@ -249,7 +253,7 @@ void object_print_json (struct keytable * kt, struct dynobj * obj, int level, st
         if (current->value == current) {
           printf("\"[Object self]\"");
         } else {
-          object_print_json(kt, (struct dynobj *) current->value, level, visited);
+          object_print_json((struct dynobj *) current->value, level, visited);
         }
       }
     } else if (current->type == type_cstr) {
@@ -270,16 +274,13 @@ void object_print_json (struct keytable * kt, struct dynobj * obj, int level, st
   printf("}");
 }
 
-struct dynobj * object_create (struct keytable * kt) {
+struct dynobj * object_create () {
+  if (DYNOBJ_KT == 0) DYNOBJ_KT = keytable_create();
+
   struct dynobj * result = malloc(sizeof(struct dynobj));
 
   result->keyCount = 0;
   result->isDirty = false;
-
-  //initialize list as a linked key value list
-  //where the first item is a key value pair with a reference to the dynobj called "this"
-  // result->first = object_create_kvpair(kt, "this", type_pointer_dynobj);
-  // object_set_property(result, "this", result, type_pointer_dynobj, true, kt);
 
   result->isDirty = true;
 
