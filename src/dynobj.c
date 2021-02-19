@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include "./keytable.c"
+#include "./linkedlist.c"
 
 struct dynobj {
   int keyCount;
@@ -56,8 +57,8 @@ enum dynobj_value_type {
   type_int32,
   type_double,
   type_float,
-  //string where the first two bytes are uint16 specify byte length to follow
-  type_nstr
+  //c style string, ends in 0x00
+  type_cstr
 };
 
 char* dynobj_value_type_to_string (char type) {
@@ -80,7 +81,7 @@ char* dynobj_value_type_to_string (char type) {
       return "int16";
     case type_int32:
       return "int32";
-    case type_nstr:
+    case type_cstr:
       return "string";
     case type_float:
       return "float";
@@ -101,7 +102,7 @@ char string_to_dynobj_value_type (char* typestr) {
   if (strcmp(typestr, "int8") == 0) return type_int8;
   if (strcmp(typestr, "int16") == 0) return type_int16;
   if (strcmp(typestr, "int32") == 0) return type_int32;
-  if (strcmp(typestr, "string") == 0) return type_nstr;
+  if (strcmp(typestr, "string") == 0) return type_cstr;
   if (strcmp(typestr, "float") == 0) return type_float;
   if (strcmp(typestr, "double") == 0) return type_double;
   return -1;
@@ -215,26 +216,43 @@ int object_get_property_count (struct dynobj * obj) {
   
 // }
 
-void object_print_json (struct keytable * kt, struct dynobj * obj) {
+void object_print_json (struct keytable * kt, struct dynobj * obj, int level, struct lln * visited) {
+  level ++;
   struct linkedkvpair * current = obj->first;
 
   struct keynode * currentKey;
 
+  if (visited == 0) {
+    // printf("visited was 0, initializing\n");
+    visited = lln_create();
+    // printf("initialized lln as %p", visited);
+  }
+
   printf("{\n");
 
   while (current != 0) {
-    // printf("hash %d", current->keyhash);
+    lln_add_value(visited, current);
 
     currentKey = keytable_get_by_hash(kt, current->keyhash);
 
-    // printf("%p", currentKey);
-
-    printf("  \"%s\"", currentKey->key);
-    printf(":");
+    for (int i=0; i<level; i++) {
+      printf("  ");
+    }
+    printf("\"%s\"", currentKey->key);
+    printf(" : ");
 
     if (current->type == type_pointer_dynobj) {
-      printf("\"[Object object]\"");
-    } else if (current->type == type_nstr) {
+      if (lln_has_value(visited, current->value)) {
+        printf("\"[Object cyclic]\"");
+      } else {
+        lln_add_value(visited, current->value);
+        if (current->value == current) {
+          printf("\"[Object self]\"");
+        } else {
+          object_print_json(kt, (struct dynobj *) current->value, level, visited);
+        }
+      }
+    } else if (current->type == type_cstr) {
       printf("\"%.*s\"", 45, (char *)current->value);
     } else if (current->type == type_pointer_function) {
       printf("[function]");
@@ -244,7 +262,12 @@ void object_print_json (struct keytable * kt, struct dynobj * obj) {
     current = current->next;
   }
 
-  printf("\n}\n");
+  printf("\n");
+  for (int i=0; i<level-1; i++) {
+    printf("  ");
+  }
+
+  printf("}");
 }
 
 struct dynobj * object_create (struct keytable * kt) {
@@ -256,7 +279,7 @@ struct dynobj * object_create (struct keytable * kt) {
   //initialize list as a linked key value list
   //where the first item is a key value pair with a reference to the dynobj called "this"
   // result->first = object_create_kvpair(kt, "this", type_pointer_dynobj);
-  object_set_property(result, "this", result, type_pointer_dynobj, true, kt);
+  // object_set_property(result, "this", result, type_pointer_dynobj, true, kt);
 
   result->isDirty = true;
 

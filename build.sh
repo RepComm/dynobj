@@ -1,5 +1,5 @@
-gcc ./src/main.c -Wl,-rpath='${ORIGIN}' -Wall -o multiconnect
+gcc ./src/main.c -Wl,-rpath='${ORIGIN}' -Wall -o demo
 
-chmod +x ./multiconnect
+chmod +x ./demo
 
 echo done compiling
