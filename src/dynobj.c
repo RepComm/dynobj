@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include "./keytable.c"
 #include "./linkedlist.c"
+#include "./jsonlexer.c"
 
 struct keytable * DYNOBJ_KT;
 
@@ -286,5 +287,12 @@ struct dynobj * object_create () {
 
   return result;
 }
+
+// struct dynobj * object_from_json (char* src) {
+//   int offset = 0;
+
+//   scan_stringliteral(src, offset);
+
+// }
 
 #endif

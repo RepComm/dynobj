@@ -24,7 +24,7 @@ void lln_add (struct lln * parent, struct lln * child) {
 }
 
 struct lln * lln_get_tail (struct lln * parent) {
-  struct lln * current = parent->start;
+  struct lln * current = parent;
   while (current->next != 0) {
     current = current->next;
   }
@@ -58,6 +58,15 @@ bool lln_has_value (struct lln * list, void * value) {
     current = current->next;
   }
   return false;
+}
+
+void lln_destroy (struct lln * list) {
+  struct lln * current = lln_get_tail(list);
+
+  while (current != 0) {
+    free(current);
+    current = lln_get_tail(list);
+  }
 }
 
 /**Iterate through the linked list with a callback function
