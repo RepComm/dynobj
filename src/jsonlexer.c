@@ -110,4 +110,14 @@ struct scan_result * scan_numberliteral (char* src, int start) {
   return result;
 }
 
+char accept_whitespace (int offset, char ch, void * info) {
+  if (ch == ' ' || ch == '\t' || ch == '\n') return accept_allow;
+  return accept_terminator;
+}
+struct scan_result * scan_whitespace (char* src, int start) {
+  struct scan_result * result = scan_string_for(src, start, 0, accept_whitespace);
+  return result;
+}
+
+
 #endif

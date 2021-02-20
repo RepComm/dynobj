@@ -288,11 +288,111 @@ struct dynobj * object_create () {
   return result;
 }
 
-// struct dynobj * object_from_json (char* src) {
-//   int offset = 0;
+struct scan_json_object_result {
+  bool success; //4?
+  int count; //4
+  struct dynobj * value; //4
+};
+struct scan_json_object_result * scan_json_object (char * src, int start) {
+  struct scan_json_object_result * result = malloc(sizeof(struct scan_json_object_result));
 
-//   scan_stringliteral(src, offset);
+  result->success = false;
+  result->count = 0;
+  result->value = 0;
 
-// }
+  int offset = start;
+
+  struct scan_result * scaninfo = 0;
+
+  //get rid of whitespace
+  scaninfo = scan_whitespace(src, offset);
+  offset += scaninfo->count;
+
+  //handle object as start
+  if (src[offset] == '{') {
+    offset ++; //consume bracket 
+
+    scaninfo = scan_whitespace(src, offset);
+    offset += scaninfo->count;
+
+    char ch = src[offset];
+    
+    // struct dynobj * o = object_create();
+    char * scankey;
+    char * scanvalue;
+
+    while (ch != 0) {
+      scaninfo = scan_whitespace(src, offset);
+      offset += scaninfo->count;
+
+      //--------read object key
+      scaninfo = scan_stringliteral(src, offset);
+      offset += scaninfo->count;
+      if (scaninfo->success) {
+        printf("key %s", scaninfo->value);
+      } else {
+        printf("no dice");
+        break;
+      }
+
+      scaninfo = scan_whitespace(src, offset);
+      offset += scaninfo->count;
+
+      //--------read object key value separator
+      ch = src[offset];
+      if (ch != ':') {
+        printf("no : for key %s", scaninfo->value);
+        break;
+      }
+      offset ++;
+
+      scaninfo = scan_whitespace(src, offset);
+      offset += scaninfo->count;
+
+      //--------read object value
+      scaninfo = scan_numberliteral(src, offset);
+      offset += scaninfo->count;
+      if (scaninfo->success) {
+        printf("value %s", scaninfo->value);
+      } else {
+        printf("no dice");
+        break;
+      }
+
+      scaninfo = scan_whitespace(src, offset);
+      offset += scaninfo->count;
+
+      ch = src[offset];
+      offset ++;
+      if (ch != ',') break;
+    }
+    
+    scaninfo = scan_whitespace(src, offset);
+    offset += scaninfo->count;
+
+    //object must end with }
+    ch = src[offset];
+    offset ++;
+    if (ch != '}') return result;
+
+    result->success = true;
+    result->count = offset-start;
+    return result;
+  } else if (src[offset == '\[']) {
+    offset ++; //consume bracket
+
+  }
+
+  return result;
+}
+
+struct dynobj * object_from_json (char* src) {
+  struct scan_json_object_result * res = scan_json_object(src, 0);
+  if (res->success) {
+    return res->value;
+  } else {
+    return 0;
+  }
+}
 
 #endif
