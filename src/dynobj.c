@@ -222,6 +222,10 @@ int object_get_property_count (struct dynobj * obj) {
 
 void object_print_json (struct dynobj * obj, int level, struct lln * visited) {
   level ++;
+  if (obj == 0) {
+    printf("[null]");
+    return;
+  }
   struct linkedkvpair * current = obj->first;
 
   struct keynode * currentKey;
@@ -261,6 +265,9 @@ void object_print_json (struct dynobj * obj, int level, struct lln * visited) {
       printf("\"%.*s\"", 45, (char *)current->value);
     } else if (current->type == type_pointer_function) {
       printf("[function]");
+    } else if (current->type == type_double) {
+      //print the value held in the double *
+      printf("%f", * ((double *)current->value) );
     }
 
     if (current->next != 0) printf(",\n");
@@ -329,7 +336,6 @@ struct scan_json_object_result * scan_json_object (char * src, int start) {
       scan_stringliteral(src, offset, scaninfo);
       offset += scaninfo->count;
       if (scaninfo->success) {
-        // printf("key %s", scaninfo->value);
         scankey = scaninfo->value;
       } else {
         printf("key at %i is malformed", offset);
@@ -351,16 +357,29 @@ struct scan_json_object_result * scan_json_object (char * src, int start) {
       offset += scaninfo->count;
 
       //--------read object value
-      scan_numberliteral(src, offset, scaninfo);
-      offset += scaninfo->count;
+
+      scan_stringliteral(src, offset, scaninfo);
       if (scaninfo->success) {
+        offset += scaninfo->count;
         scanvalue = scaninfo->value;
 
         object_set_property(o, scankey, scanvalue, type_cstr);
-        // printf("%s:%s", scankey, scanvalue);
+
       } else {
-        printf("value at %i is malformed", offset);
-        break;
+        scan_numberliteral(src, offset, scaninfo);
+        if (scaninfo->success) {
+          offset += scaninfo->count;
+          scanvalue = scaninfo->value;
+
+          double * vp = malloc(sizeof(double));
+          sscanf(scanvalue, "%lf", vp);
+          // *vp = v;
+
+          object_set_property(o, scankey, vp, type_double);
+        } else {
+          printf("value is malformed");
+          break;
+        }
       }
 
       scan_whitespace(src, offset, scaninfo);

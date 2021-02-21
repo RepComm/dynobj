@@ -40,10 +40,10 @@ char * string_copy (char * src, int start, int width) {
 }
 
 enum accept_answer {
-  //when the accept callback is ok with the char but wants to keep going
-  accept_allow,
   //when it doesn't accept the string because of bad format
   accept_error,
+  //when the accept callback is ok with the char but wants to keep going
+  accept_allow,
   //when it is satisfied and scan_result should be calculated/returned
   accept_done,
   //handles cases where its ok to allow_done
