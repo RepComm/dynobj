@@ -5,15 +5,16 @@
 
 #include "./jsonlexer.c"
 #include "./dynobj.c"
+#include "./utils.c"
 
-int main(int argc, const char **argv) {
-  char * mystr = "{ \"key1\" : \"1e0\", \"key2\" : { \"key3\" : 3 } }";
+int main(int argc, char **argv) {
+  char * mystr = string_concat(argv, 1, argc, " ");
+  printf("parsing %s as json\n", mystr);
+  // char * mystr = "{ \"key1\" : \"1e0\", \"key2\" : { \"key3\" : 3, \"key4\" : { \"key5\" : \"hello world\" } } }";
 
-  struct scan_json_object_result * res = scan_json_object(mystr, 0);
+  struct dynobj * myobj = object_from_json(mystr);
 
-  struct dynobj * reso = res->value;
-
-  object_print_json(reso, 0, 0);
+  object_print_json(myobj, 0, 0);
 
   printf("\n\ndone\n");
 

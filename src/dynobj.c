@@ -267,7 +267,7 @@ void object_print_json (struct dynobj * obj, int level, struct lln * visited) {
       printf("[function]");
     } else if (current->type == type_double) {
       //print the value held in the double *
-      printf("%f", * ((double *)current->value) );
+      printf("%lg", * ((double *)current->value) );
     }
 
     if (current->next != 0) printf(",\n");
@@ -338,7 +338,10 @@ struct scan_json_object_result * scan_json_object (char * src, int start) {
       if (scaninfo->success) {
         scankey = scaninfo->value;
       } else {
-        printf("key at %i is malformed", offset);
+        //this handles a case where an object or array doesn't have keys/elements
+        if (!char_in_string("{}[]", ch)) {
+          printf("key at %i is malformed, found %c", offset, ch);
+        }
         break;
       }
 
