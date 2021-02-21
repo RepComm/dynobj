@@ -6,6 +6,8 @@
 #include <stdbool.h>
 #include "./lexer.c"
 
+//--------string literal scanner
+
 struct strlit_info {
   bool quote_seen;
   bool is_escaped;
@@ -29,12 +31,20 @@ char accept_stringliteral (int offset, char ch, void * info) {
   }
 }
 
-struct scan_result * scan_stringliteral (char* src, int start) {
+void scan_stringliteral (char* src, int start, struct scan_result * out) {
   struct strlit_info * info = malloc(sizeof(struct strlit_info));
-  struct scan_result * result = scan_string_for(src, start, info, accept_stringliteral);
+  scan_string_for(src, start, info, accept_stringliteral, out);
+
+  //remove quotes from string after scan
+  char * str_without_quotes = string_copy(out->value, 1, out->count-2);
+  free(out->value); //properly get rid of old string
+  out->value = str_without_quotes;
+
   free(info);
-  return result;
+  return;
 }
+
+//--------number literal scanner
 
 struct numlit_info {
   bool digit_seen;
@@ -103,21 +113,22 @@ char accept_numberliteral (int offset, char ch, void * info) {
     return accept_terminator;
   }
 }
-struct scan_result * scan_numberliteral (char* src, int start) {
+void scan_numberliteral (char* src, int start, struct scan_result * out) {
   struct numlit_info * info = malloc(sizeof(struct numlit_info));
-  struct scan_result * result = scan_string_for(src, start, info, accept_numberliteral);
+  scan_string_for(src, start, info, accept_numberliteral, out);
   free(info);
-  return result;
+  return;
 }
+
+//--------white space scanner
 
 char accept_whitespace (int offset, char ch, void * info) {
   if (ch == ' ' || ch == '\t' || ch == '\n') return accept_allow;
   return accept_terminator;
 }
-struct scan_result * scan_whitespace (char* src, int start) {
-  struct scan_result * result = scan_string_for(src, start, 0, accept_whitespace);
-  return result;
+void scan_whitespace (char* src, int start, struct scan_result * out) {
+  scan_string_for(src, start, 0, accept_whitespace, out);
+  return;
 }
-
 
 #endif

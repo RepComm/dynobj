@@ -59,9 +59,13 @@ enum accept_answer {
   * The callback function is provided a `persistence` struct
   * so it can remember states if desired (such as searching for more than one quote in a string literal)
   */
-struct scan_result * scan_string_for (char * src, int start, void * persistence, char (*accept)( int offset, char ch, void * persistence )) {
+void scan_string_for (char * src, int start, void * persistence, char (*accept)( int offset, char ch, void * persistence ), struct scan_result * out) {
+  if (out == 0) return;
+
   //stores the result of scanning the string
-  struct scan_result * result = scan_result_get(0);
+  out->count = 0;
+  out->success = false;
+  out->value = 0;
 
   //the current char
   char ch = src[start];
@@ -85,38 +89,38 @@ struct scan_result * scan_string_for (char * src, int start, void * persistence,
       accept_allow_seen = true;
     } else if (accept_state == accept_error) {
       //uh oh
-      result->success = false;
-      result->count = 0;
-      result->value = 0;
-      return result;
+      out->success = false;
+      out->count = 0;
+      out->value = 0;
+      return;
     } else if (accept_state == accept_done) {
       //we're done
-      result->success = true;
-      result->count = i+1;
-      result->value = string_copy(src, start, i+1);
-      return result;
+      out->success = true;
+      out->count = i+1;
+      out->value = string_copy(src, start, i+1);
+      return;
     } else if (accept_state == accept_terminator) {
       //handle based on previous state
       if (accept_allow_seen) {
         //if any chars have been allowed previously, we're done
-        result->success = true;
-        result->count = i; //-1 relative to accept_done
-        result->value = string_copy(src, start, i); //same here
+        out->success = true;
+        out->count = i; //-1 relative to accept_done
+        out->value = string_copy(src, start, i); //same here
       } else {
         //otherwise there were no valid chars read
-        result->success = false;
-        result->count = 0;
-        result->value = 0;
+        out->success = false;
+        out->count = 0;
+        out->value = 0;
       }
-      return result;
+      return;
     }
   }
   
   //never reached accept_done or accept_terminator
-  result->success = false;
-  result->count = 0;
-  result->value = 0;
-  return result;
+  out->success = false;
+  out->count = 0;
+  out->value = 0;
+  return;
 }
 
 #endif

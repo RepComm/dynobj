@@ -302,40 +302,41 @@ struct scan_json_object_result * scan_json_object (char * src, int start) {
 
   int offset = start;
 
-  struct scan_result * scaninfo = 0;
+  struct scan_result * scaninfo = scan_result_get(0);
 
   //get rid of whitespace
-  scaninfo = scan_whitespace(src, offset);
+  scan_whitespace(src, offset, scaninfo);
   offset += scaninfo->count;
 
   //handle object as start
   if (src[offset] == '{') {
     offset ++; //consume bracket 
 
-    scaninfo = scan_whitespace(src, offset);
+    scan_whitespace(src, offset, scaninfo);
     offset += scaninfo->count;
 
     char ch = src[offset];
     
-    // struct dynobj * o = object_create();
+    struct dynobj * o = object_create();
     char * scankey;
     char * scanvalue;
 
     while (ch != 0) {
-      scaninfo = scan_whitespace(src, offset);
+      scan_whitespace(src, offset, scaninfo);
       offset += scaninfo->count;
 
       //--------read object key
-      scaninfo = scan_stringliteral(src, offset);
+      scan_stringliteral(src, offset, scaninfo);
       offset += scaninfo->count;
       if (scaninfo->success) {
-        printf("key %s", scaninfo->value);
+        // printf("key %s", scaninfo->value);
+        scankey = scaninfo->value;
       } else {
-        printf("no dice");
+        printf("key at %i is malformed", offset);
         break;
       }
 
-      scaninfo = scan_whitespace(src, offset);
+      scan_whitespace(src, offset, scaninfo);
       offset += scaninfo->count;
 
       //--------read object key value separator
@@ -346,37 +347,48 @@ struct scan_json_object_result * scan_json_object (char * src, int start) {
       }
       offset ++;
 
-      scaninfo = scan_whitespace(src, offset);
+      scan_whitespace(src, offset, scaninfo);
       offset += scaninfo->count;
 
       //--------read object value
-      scaninfo = scan_numberliteral(src, offset);
+      scan_numberliteral(src, offset, scaninfo);
       offset += scaninfo->count;
       if (scaninfo->success) {
-        printf("value %s", scaninfo->value);
+        scanvalue = scaninfo->value;
+
+        object_set_property(o, scankey, scanvalue, type_cstr);
+        // printf("%s:%s", scankey, scanvalue);
       } else {
-        printf("no dice");
+        printf("value at %i is malformed", offset);
         break;
       }
 
-      scaninfo = scan_whitespace(src, offset);
+      scan_whitespace(src, offset, scaninfo);
       offset += scaninfo->count;
 
       ch = src[offset];
-      offset ++;
-      if (ch != ',') break;
+      //next char should be either comma or }
+      if (ch == ',') {
+        offset ++; //consume
+      } else {
+        break;
+      }
     }
     
-    scaninfo = scan_whitespace(src, offset);
+    scan_whitespace(src, offset, scaninfo);
     offset += scaninfo->count;
 
     //object must end with }
     ch = src[offset];
     offset ++;
-    if (ch != '}') return result;
+    if (ch != '}') {
+      printf("could not find } for object, found %c", ch);
+      return result;
+    }
 
     result->success = true;
     result->count = offset-start;
+    result->value = o;
     return result;
   } else if (src[offset == '\[']) {
     offset ++; //consume bracket
