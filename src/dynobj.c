@@ -223,7 +223,7 @@ int object_get_property_count (struct dynobj * obj) {
 void object_print_json (struct dynobj * obj, int level, struct lln * visited) {
   level ++;
   if (obj == 0) {
-    printf("[null]");
+    printf("[null]\n");
     return;
   }
   struct linkedkvpair * current = obj->first;
@@ -357,15 +357,20 @@ struct scan_json_object_result * scan_json_object (char * src, int start) {
       offset += scaninfo->count;
 
       //--------read object value
+      bool value_accepted = false;
+      ch = src[offset];
 
-      scan_stringliteral(src, offset, scaninfo);
-      if (scaninfo->success) {
-        offset += scaninfo->count;
-        scanvalue = scaninfo->value;
+      if (!value_accepted) {
+        scan_stringliteral(src, offset, scaninfo);
+        if (scaninfo->success) {
+          offset += scaninfo->count;
+          scanvalue = scaninfo->value;
 
-        object_set_property(o, scankey, scanvalue, type_cstr);
-
-      } else {
+          object_set_property(o, scankey, scanvalue, type_cstr);
+          value_accepted = true;
+        }
+      } 
+      if (!value_accepted) {
         scan_numberliteral(src, offset, scaninfo);
         if (scaninfo->success) {
           offset += scaninfo->count;
@@ -373,13 +378,26 @@ struct scan_json_object_result * scan_json_object (char * src, int start) {
 
           double * vp = malloc(sizeof(double));
           sscanf(scanvalue, "%lf", vp);
-          // *vp = v;
 
           object_set_property(o, scankey, vp, type_double);
-        } else {
-          printf("value is malformed");
-          break;
+          value_accepted = true;
         }
+      }
+      if (!value_accepted) {
+        if (ch == '{') {
+          struct scan_json_object_result * child = scan_json_object(src, offset);
+          if (child->success) {
+            value_accepted = true;
+            offset += child->count;
+            object_set_property(o, scankey, child->value, type_pointer_dynobj);
+          } else {
+            free(child);
+          }
+        }
+      }
+      if (!value_accepted) {
+        printf("malformed value for key %s\n", scankey);
+        break;
       }
 
       scan_whitespace(src, offset, scaninfo);
@@ -401,7 +419,7 @@ struct scan_json_object_result * scan_json_object (char * src, int start) {
     ch = src[offset];
     offset ++;
     if (ch != '}') {
-      printf("could not find } for object, found %c", ch);
+      printf("could not find } for object, found %c\n", ch);
       return result;
     }
 

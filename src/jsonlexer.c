@@ -59,7 +59,7 @@ char * DIGITS = "0123456789";
 char accept_numberliteral (int offset, char ch, void * info) {
   struct numlit_info * p = (struct numlit_info *) info;
 
-  bool debug = true;
+  bool debug = false;
 
   // if (debug) printf("[ %c ]", ch);
 
@@ -98,13 +98,13 @@ char accept_numberliteral (int offset, char ch, void * info) {
     //so the best case is accept_terminator
 
     if (!p->digit_seen) {
-      if (debug) printf("no digits in number");
+      if (debug) printf("no digits in number\n");
       return accept_error;
     }
 
     //if e was seen but no digit after, not valid
     if (p->e_seen && !p->digit_follows_e) {
-      if (debug) printf("e was seen, but no digit follows");
+      if (debug) printf("e was seen, but no digit follows\n");
       return accept_error;
     }
 

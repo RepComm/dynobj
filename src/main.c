@@ -7,7 +7,7 @@
 #include "./dynobj.c"
 
 int main(int argc, const char **argv) {
-  char * mystr = "{ \"key1\" : \"1e0\", \"key2\" : 2, \"key3\" : \"three\", \"key4\" : 4 }";
+  char * mystr = "{ \"key1\" : \"1e0\", \"key2\" : { \"key3\" : 3 } }";
 
   struct scan_json_object_result * res = scan_json_object(mystr, 0);
 
