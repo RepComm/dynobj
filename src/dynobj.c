@@ -36,6 +36,8 @@ struct DynObj {
   bool (*set)(DynObjP obj, char * key, void * value);
   //get a value by its key
   void * (*get)(DynObjP obj, char * key);
+
+  void * (*getByHash)(DynObjP obj, int keyhash);
 };
 
 /**Tests if obj is null
@@ -188,6 +190,12 @@ KeyValuePairP DynObj_getPropertyByKey (DynObjP obj, char * key) {
   );
 }
 
+void * DynObj_getByHash (DynObjP obj, int keyhash) {
+  KeyValuePairP pair = DynObj_getPropertyByHash(obj, keyhash);
+  if (pair == 0) return 0;
+  return pair->valuePointer;
+}
+
 void * DynObj_get (DynObjP obj, char * key) {
   KeyValuePairP pair = DynObj_getPropertyByKey(obj, key);
   if (pair == 0) return 0;
@@ -255,6 +263,7 @@ DynObjP DynObj_create () {
   result->propertyCountDirty = true;
 
   result->set = &DynObj_set;
+  result->getByHash = &DynObj_getByHash;
   result->get = &DynObj_get;
   return result;
 }
