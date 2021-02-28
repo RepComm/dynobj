@@ -1,450 +1,262 @@
 
-
 #ifndef DYNOBJ_C
 #define DYNOBJ_C
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdbool.h>
-#include "./keytable.c"
+//imports HashedKeyStore
+#include "./hashedkeystore.c"
+
+#include "./murmurhash/murmurhash.c"
+
+//imports lln
 #include "./linkedlist.c"
-#include "./jsonlexer.c"
 
-struct keytable * DYNOBJ_KT;
+//imports KeyValuePair
+#include "./kvpair.c"
 
-struct dynobj {
-  int keyCount;
-  bool isDirty;
-  struct linkedkvpair * first;
+//stdbool.h is nice, but lets try and use 0 dependencies
+#include "./boolean.h"
+
+//A key store for DynObj - may be null
+//Use DynObj_GetHashedKeyStore () unless you really know
+//what you're doing (I don't, and I wrote this stuff)
+HashedKeyStoreP DynObj_HashedKeyStore;
+
+//typing "struct DynObj *" all the time gets old
+#define DynObjP struct DynObj *
+
+struct DynObj {
+  //linked list of KeyValuePair - may be null
+  llnp properties;
+  //a cached value so we don't iterate the linked list constantly
+  int propertyCount;
+  //this needs to be updated when properties are modified
+  bool propertyCountDirty;
+
+  //set a value by its key (capable of runtime append)
+  bool (*set)(DynObjP obj, char * key, void * value);
+  //get a value by its key
+  void * (*get)(DynObjP obj, char * key);
 };
 
-struct linkedkvpair {
-  //string key of the value (actually a hash of the key)
-  int keyhash; //4 bytes
-
-  //type of the value to expect
-  char type; //1 byte
-
-  //pointer to the value
-  void* value; //4 bytes
-
-  //link to next kv pair
-  struct linkedkvpair * next;
-};
-
-struct linkedkvpair * object_create_kvpair (char* key, char type) {
-  struct linkedkvpair * result = (struct linkedkvpair*)  malloc(sizeof(struct linkedkvpair));
-  
-  //get the hash from the keytable (makes key retrievable, and also efficient for reused keys)
-  // result->keyhash = keytable_get_hash(kt, key)->hash;
-  result->keyhash = keytable_get_hash(DYNOBJ_KT, key)->hash;
-  result->type = type;
-  result->next = 0x0; //init to 0 so we don't have weird results
-  result->value = 0x0;
-  return result;
-}
-
-enum dynobj_value_type {
-  //a pointer to another dynobj
-  type_pointer_dynobj,
-
-  //a pointer to an unknown type, aka void *
-  type_pointer_void,
-
-  //a pointer to a C function
-  type_pointer_function,
-  type_uint8,
-  type_uint16,
-  type_uint32,
-  type_int8,
-  type_int16,
-  type_int32,
-  type_double,
-  type_float,
-  //c style string, ends in 0x00
-  type_cstr
-};
-
-char* dynobj_value_type_to_string (char type) {
-  switch (type) {
-    case type_pointer_dynobj:
-      return "dynobj";
-    case type_pointer_function:
-      return "function";
-    case type_pointer_void:
-      return "any";
-    case type_uint8:
-      return "uint8";
-    case type_uint16:
-      return "uint16";
-    case type_uint32:
-      return "uint32";
-    case type_int8:
-      return "int8";
-    case type_int16:
-      return "int16";
-    case type_int32:
-      return "int32";
-    case type_cstr:
-      return "string";
-    case type_float:
-      return "float";
-    case type_double:
-      return "double";
-    default:
-      return "unknown";
-  }
-}
-
-char string_to_dynobj_value_type (char* typestr) {
-  if (strcmp(typestr, "dynobj") == 0) return type_pointer_dynobj;
-  if (strcmp(typestr, "function") == 0) return type_pointer_function;
-  if (strcmp(typestr, "any") == 0) return type_pointer_void;
-  if (strcmp(typestr, "uint8") == 0) return type_uint8;
-  if (strcmp(typestr, "uint16") == 0) return type_uint16;
-  if (strcmp(typestr, "uint32") == 0) return type_uint32;
-  if (strcmp(typestr, "int8") == 0) return type_int8;
-  if (strcmp(typestr, "int16") == 0) return type_int16;
-  if (strcmp(typestr, "int32") == 0) return type_int32;
-  if (strcmp(typestr, "string") == 0) return type_cstr;
-  if (strcmp(typestr, "float") == 0) return type_float;
-  if (strcmp(typestr, "double") == 0) return type_double;
-  return -1;
-}
-
-struct linkedkvpair * object_get_property (struct dynobj * obj, char* key) {
-  /**Using internal method to directly hash the key instead of caching it
-   * This is less expensive, and its ok to use it here because:
-   * 1. the key is likely already calculated / cached or
-   * 2. the key shouldn't be cached because of runtime errors generating bad keys
-   */
-  int keyhash = _keytable_hashkey(key);
-
-  struct linkedkvpair * cn = obj->first;
-
-  //iterate the linked list of key values
-  while (cn != 0x0) {
-    if (cn->keyhash == keyhash) return cn;
-    cn = cn->next;
-  }
-
-  return 0x0;
-}
-
-bool object_has_property (struct dynobj * obj, char* key) {
-  struct linkedkvpair * n = object_get_property(obj, key);
-  return n != 0x0;
-}
-
-struct linkedkvpair * object_create_property (struct dynobj * obj, char* key, void* value, char type) {
-  struct linkedkvpair * n = object_create_kvpair(key, type);
-  // struct linkedkvpair * n = object_create_kvpair(kt, key, type);
-  n->value = value;
-  
-  //If object has no property, set the new one as the first one
-  if (obj->first == 0) {
-    obj->first = n;
-    obj->keyCount = 1;
-    obj->isDirty = false;
-    return n;
-  }
-
-  //while we're here, might as well recalculate the prop count!
-  int count = 1;
-
-  //otherwise stick it onto the end
-  struct linkedkvpair * last = obj->first;
-  while (last->next != 0) {
-    last = last->next;
-    count ++;
-  }
-
-  obj->keyCount = count;
-  obj->isDirty = false;
-
-  last->next = n;
-  n->next = 0;
-  return n;
-}
-
-/**Set a property on the object obj
- * If the property given by key doesn't exist:
- * createIfNull == true will create the property (NOTE: keytable kt must not be null in this case)
- * otherwise return false, no property is set
+/**Tests if obj is null
  * 
- * If createIfNull == false, keytable kt can be set to null / 0 / 0x0 safely
+ * Yes its wordy, but its explicit
+ * Same as obj == 0
  */
-bool object_set_property (struct dynobj * obj, char* key, void* value, char type) {
-  struct linkedkvpair * n = object_get_property(obj, key);
+bool DynObj_isNull (DynObjP obj) {
+  return obj == 0;
+}
 
-  if (n == 0) {
-    n = object_create_property(obj, key, value, type);
-    return true;
-  }
-
-  n->value = value;
-  n->type = type;
-
+/**Mark an object as needing property count to be recalculated and cached
+ * 
+ * This should be called automatically by built in functions for DynObj
+ * However, if your code modifies properties, its a good idea to use this
+ * 
+ * Returns true aka 1 if success, 0 if obj is null aka 0
+ */
+bool DynObj_markPropertyCountDirty (DynObjP obj) {
+  if (DynObj_isNull(obj)) return false;
+  obj->propertyCountDirty = true;
   return true;
 }
 
-void object_set_dirty (struct dynobj * obj, bool dirty) {
-  obj->isDirty = dirty;
-}
+/**Get a count of properties in the object
+ * 
+ * If obj is null aka 0, result is -1
+ * If obj->properties is null aka 0, result is 0
+ * 
+ * If obj->propertyCountDirty then its cached value will be recalculated
+ */
+int DynObj_getPropertyCount (DynObjP obj) {
+  if (DynObj_isNull(obj)) return -1;
 
-//gets or calculates object prop count
-int object_get_property_count (struct dynobj * obj) {
-  int result = 0;
-
-  if (obj->isDirty) {
-    struct linkedkvpair * cn = obj->first;
-
-    int counter = 0;
-    //iterate the linked list of key values
-    while (cn != 0x0) {
-      counter ++;
-      cn = cn->next;
+  if (obj->propertyCountDirty) {
+    llnp current = obj->properties;
+    
+    int result = 0;
+    while (current != 0) {
+      result ++;
     }
-    result = counter;
-    obj->keyCount = result;
-    obj->isDirty = false;
+    obj->propertyCount = result;
+    obj->propertyCountDirty = false;
+    return result;
   } else {
-    result = obj->keyCount;
+    return obj->propertyCount;
   }
-
-  return result;
 }
 
-// char* object_to_jsonstr (struct dynobj * obj) {
-//   int count = object_get_property_count(obj);
-  
-// }
+/**Check that a property index is valid
+ * 
+ * Validity is such that index is greater than -1 and less than propertyCount
+ */
+bool DynObj_getPropertyIndexValid (DynObjP obj, int index) {
+  //null check isn't necessary since index cannot be smaller and greater than -1
+  //see getPropertyCount
+  // if (DynObj_isNull(obj)) return false;
+  return index < DynObj_getPropertyCount(obj) && index > -1;
+}
 
-void object_print_json (struct dynobj * obj, int level, struct lln * visited) {
-  level ++;
-  if (obj == 0) {
-    printf("[null]\n");
-    return;
-  }
-  struct linkedkvpair * current = obj->first;
+llnp DynObj_getPropertyLinkAtIndex (DynObjP obj, int index) {
+  //Null check isn't necessary, see getPropertyIndexValid
+  if (!DynObj_getPropertyIndexValid(obj, index)) return 0;
 
-  struct keynode * currentKey;
-
-  if (visited == 0) {
-    // printf("visited was 0, initializing\n");
-    visited = lln_create();
-    // printf("initialized lln as %p", visited);
-  }
-
-  printf("{\n");
-
+  int indexer = 0;
+  llnp current = obj->properties;
   while (current != 0) {
-    lln_add_value(visited, current);
-
-    currentKey = keytable_get_by_hash(DYNOBJ_KT, current->keyhash);
-    // currentKey = keytable_get_by_hash(kt, current->keyhash);
-
-    for (int i=0; i<level; i++) {
-      printf("  ");
-    }
-    printf("\"%s\"", currentKey->key);
-    printf(" : ");
-
-    if (current->type == type_pointer_dynobj) {
-      if (lln_has_value(visited, current->value)) {
-        printf("\"[Object cyclic]\"");
-      } else {
-        lln_add_value(visited, current->value);
-        if (current->value == current) {
-          printf("\"[Object self]\"");
-        } else {
-          object_print_json((struct dynobj *) current->value, level, visited);
-        }
-      }
-    } else if (current->type == type_cstr) {
-      printf("\"%.*s\"", 45, (char *)current->value);
-    } else if (current->type == type_pointer_function) {
-      printf("[function]");
-    } else if (current->type == type_double) {
-      //print the value held in the double *
-      printf("%lg", * ((double *)current->value) );
-    }
-
-    if (current->next != 0) printf(",\n");
+    if (indexer == index) return current;
+    indexer ++;
     current = current->next;
   }
 
-  printf("\n");
-  for (int i=0; i<level-1; i++) {
-    printf("  ");
+  //This should happen..
+  return 0;
+}
+
+/**Gets the property at an index in obj's properties linked list
+ * 
+ * If the index is not valid (beyond length of list or bellow 0)
+ * null aka 0 is returned
+ * 
+ * Warning, value may still be null, as properties are allowed to have null values
+ */
+KeyValuePairP DynObj_getPropertyAtIndex (DynObjP obj, int index) {
+  //no need to do bounds checks since LinkAtIndex does this
+  llnp link = DynObj_getPropertyLinkAtIndex(obj, index);
+
+  if (link == 0) return 0;
+  //value may legally be null
+  return link->value;
+}
+
+/**Get a KeyValuePair pointer by its keyHash
+ * 
+ * Returns null aka 0 if not found
+ */
+KeyValuePairP DynObj_getPropertyByHash (DynObjP obj, int keyHash) {
+  if (DynObj_isNull(obj)) return 0;
+  
+  llnp current = obj->properties;
+  KeyValuePairP currentPair;
+
+  while (current != 0) {
+    currentPair = current->value;
+    //null check and keyHash check
+    if (currentPair != 0 && currentPair->keyHash == keyHash) return currentPair;
+
+    current = current->next;
   }
 
-  printf("}");
+  return 0;
 }
 
-struct dynobj * object_create () {
-  if (DYNOBJ_KT == 0) DYNOBJ_KT = keytable_create();
+//========Implement a callback for HashedKeyStore
+//Which bridges that gaps between DynObj, HashedKeyStore, and murmurhash
+#define DynObj_HashedKeyStore_seed 0
 
-  struct dynobj * result = malloc(sizeof(struct dynobj));
-
-  result->keyCount = 0;
-  result->isDirty = false;
-
-  result->isDirty = true;
-
-  return result;
+int impl_DynObj_HashedKeyStore_hashCallback (char * key) {
+  //Simply call murmurhash in this case
+  //This can be swapped out as long as we supply a char * and acquire an int
+  //Also, we really don't want hash collisions
+  //either swap the algorithm, or set the seed to something else
+  return murmurhash(key, (uint32_t) strlen(key), DynObj_HashedKeyStore_seed);
 }
 
-struct scan_json_object_result {
-  bool success; //4?
-  int count; //4
-  struct dynobj * value; //4
-};
-struct scan_json_object_result * scan_json_object (char * src, int start) {
-  struct scan_json_object_result * result = malloc(sizeof(struct scan_json_object_result));
-
-  result->success = false;
-  result->count = 0;
-  result->value = 0;
-
-  int offset = start;
-
-  struct scan_result * scaninfo = scan_result_get(0);
-
-  //get rid of whitespace
-  scan_whitespace(src, offset, scaninfo);
-  offset += scaninfo->count;
-
-  //handle object as start
-  if (src[offset] == '{') {
-    offset ++; //consume bracket 
-
-    scan_whitespace(src, offset, scaninfo);
-    offset += scaninfo->count;
-
-    char ch = src[offset];
-    
-    struct dynobj * o = object_create();
-    char * scankey;
-    char * scanvalue;
-
-    while (ch != 0) {
-      scan_whitespace(src, offset, scaninfo);
-      offset += scaninfo->count;
-
-      //--------read object key
-      scan_stringliteral(src, offset, scaninfo);
-      offset += scaninfo->count;
-      if (scaninfo->success) {
-        scankey = scaninfo->value;
-      } else {
-        //this handles a case where an object or array doesn't have keys/elements
-        if (!char_in_string("{}[]", ch)) {
-          printf("key at %i is malformed, found %c", offset, ch);
-        }
-        break;
-      }
-
-      scan_whitespace(src, offset, scaninfo);
-      offset += scaninfo->count;
-
-      //--------read object key value separator
-      ch = src[offset];
-      if (ch != ':') {
-        printf("no : for key %s", scaninfo->value);
-        break;
-      }
-      offset ++;
-
-      scan_whitespace(src, offset, scaninfo);
-      offset += scaninfo->count;
-
-      //--------read object value
-      bool value_accepted = false;
-      ch = src[offset];
-
-      if (!value_accepted) {
-        scan_stringliteral(src, offset, scaninfo);
-        if (scaninfo->success) {
-          offset += scaninfo->count;
-          scanvalue = scaninfo->value;
-
-          object_set_property(o, scankey, scanvalue, type_cstr);
-          value_accepted = true;
-        }
-      } 
-      if (!value_accepted) {
-        scan_numberliteral(src, offset, scaninfo);
-        if (scaninfo->success) {
-          offset += scaninfo->count;
-          scanvalue = scaninfo->value;
-
-          double * vp = malloc(sizeof(double));
-          sscanf(scanvalue, "%lf", vp);
-
-          object_set_property(o, scankey, vp, type_double);
-          value_accepted = true;
-        }
-      }
-      if (!value_accepted) {
-        if (ch == '{') {
-          struct scan_json_object_result * child = scan_json_object(src, offset);
-          if (child->success) {
-            value_accepted = true;
-            offset += child->count;
-            object_set_property(o, scankey, child->value, type_pointer_dynobj);
-          } else {
-            free(child);
-          }
-        }
-      }
-      if (!value_accepted) {
-        printf("malformed value for key %s\n", scankey);
-        break;
-      }
-
-      scan_whitespace(src, offset, scaninfo);
-      offset += scaninfo->count;
-
-      ch = src[offset];
-      //next char should be either comma or }
-      if (ch == ',') {
-        offset ++; //consume
-      } else {
-        break;
-      }
-    }
-    
-    scan_whitespace(src, offset, scaninfo);
-    offset += scaninfo->count;
-
-    //object must end with }
-    ch = src[offset];
-    offset ++;
-    if (ch != '}') {
-      printf("could not find } for object, found %c\n", ch);
-      return result;
-    }
-
-    result->success = true;
-    result->count = offset-start;
-    result->value = o;
-    return result;
-  } else if (src[offset == '\[']) {
-    offset ++; //consume bracket
-
+//Access the key store, which will ensure it isn't null
+HashedKeyStoreP DynObj_GetHashedKeyStore () {
+  //If the key store for DynObj lib is null
+  if (DynObj_HashedKeyStore == 0) {
+    //Instantiate it
+    DynObj_HashedKeyStore = HashedKeyStore_create(
+      //Using a callback that implements the hashing math
+      impl_DynObj_HashedKeyStore_hashCallback
+    );
   }
-
-  return result;
+  return DynObj_HashedKeyStore;
 }
 
-struct dynobj * object_from_json (char* src) {
-  struct scan_json_object_result * res = scan_json_object(src, 0);
-  if (res->success) {
-    return res->value;
+/**Get a hash of a string key
+ */
+int DynObj_getHashForKey (char * key) {
+  HashedKeyStoreP store = DynObj_GetHashedKeyStore();
+  return store->getHash(store, key);
+}
+
+KeyValuePairP DynObj_getPropertyByKey (DynObjP obj, char * key) {
+  return DynObj_getPropertyByHash(
+    obj,
+    DynObj_getHashForKey(key)
+  );
+}
+
+void * DynObj_get (DynObjP obj, char * key) {
+  KeyValuePairP pair = DynObj_getPropertyByKey(obj, key);
+  if (pair == 0) return 0;
+  return pair->valuePointer;
+}
+
+/**Set a property on an object
+ * 
+ * This works for keys that don't exist yet
+ * 
+ * Returns false aka 0 if memory could not allocate for any reason
+ */
+bool DynObj_set (DynObjP obj, char * key, void * value) {
+  if (DynObj_isNull(obj)) return false;
+
+  KeyValuePairP pair = DynObj_getPropertyByKey(obj, key);
+  if (pair == 0) {
+    pair = KeyValuePair_create(
+      DynObj_getHashForKey(key),
+      value
+    );
+
+    //its possible _create ran out of memory
+    if (pair == 0) return 0;
+
+    //If object has no properties, we need to create the linked list start
+    if (obj->properties == 0) {
+      //create the first link
+      llnp first = lln_create();
+
+      //if we couldn't allocate for the link return 0
+      if (first == 0) return 0;
+
+      //set the links value to the new key value pair
+      first->value = pair;
+
+      //set object's properties to the first link
+      obj->properties = first;
+    } else {
+      //append the new key value pair to the properties linked list
+      lln_add_value(obj->properties, pair);
+    }
+
+    //make sure property count knows to update
+    DynObj_markPropertyCountDirty(obj);
   } else {
-    return 0;
+
+    //Modifying values doesn't change property count
+    pair->valuePointer = value;
   }
+  return true;
+}
+
+/**Create a dynamic object
+ * 
+ * Returns null aka 0 if object couldn't be allocated
+ */
+DynObjP DynObj_create () {
+  DynObjP result = malloc(sizeof(struct DynObj));
+
+  if (DynObj_isNull(result)) return 0;
+
+  result->properties = 0;
+  result->propertyCount = 0;
+  result->propertyCountDirty = true;
+
+  result->set = &DynObj_set;
+  result->get = &DynObj_get;
+  return result;
 }
 
 #endif

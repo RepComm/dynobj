@@ -3,20 +3,25 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "./jsonlexer.c"
-#include "./dynobj.c"
-#include "./utils.c"
+#include "dynobj.c"
 
 int main(int argc, char **argv) {
-  char * mystr = string_concat(argv, 1, argc, " ");
-  printf("parsing %s as json\n", mystr);
-  // char * mystr = "{ \"key1\" : \"1e0\", \"key2\" : { \"key3\" : 3, \"key4\" : { \"key5\" : \"hello world\" } } }";
+  
+  //Create an object
+  DynObjP myobj = DynObj_create();
 
-  struct dynobj * myobj = object_from_json(mystr);
+  //set a property
+  myobj->set(myobj, "name", "hello world");
 
-  object_print_json(myobj, 0, 0);
+  //get the property again
+  void * value = myobj->get(myobj, "name");
 
-  printf("\n\ndone\n");
+  //get the value as text (because the value could be anything)
+  char * valueAsText = (char *) value;
+
+  //print text in terminal
+  printf(" %s ", valueAsText);
+
 
   return 0;
 }

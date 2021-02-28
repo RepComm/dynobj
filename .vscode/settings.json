@@ -1,8 +1,0 @@
-{
-  "files.associations": {
-    "stdbool.h": "c",
-    "limits": "c",
-    "type_traits": "c",
-    "murmurhash.h": "c"
-  }
-}

@@ -2,6 +2,8 @@
 #ifndef LINKEDLIST_C
 #define LINKEDLIST_C
 
+#include "./boolean.h"
+
 struct lln {
   void * value;
   //the first node in the list (may be the same as current)
@@ -10,29 +12,32 @@ struct lln {
   struct lln * next;
 };
 
-struct lln * lln_create () {
-  struct lln * link = malloc(sizeof(struct lln));
+//Typing "struct lln *" is annoying
+#define llnp struct lln *
+
+llnp lln_create () {
+  llnp link = malloc(sizeof(struct lln));
   link->start = link;
   link->next = 0;
   link->value = 0;
   return link;
 }
 
-void lln_add (struct lln * parent, struct lln * child) {
+void lln_add (llnp parent, llnp child) {
   parent->next = child;
   child->start = parent->start;
 }
 
-struct lln * lln_get_tail (struct lln * parent) {
-  struct lln * current = parent;
+llnp lln_get_tail (llnp parent) {
+  llnp current = parent;
   while (current->next != 0) {
     current = current->next;
   }
   return current;
 }
 
-struct lln * lln_add_value (struct lln * parent, void * value) {
-  struct lln * node = lln_create();
+llnp lln_add_value (llnp parent, void * value) {
+  llnp node = lln_create();
   node->value = value;
 
   lln_add(lln_get_tail(parent), node);
@@ -40,8 +45,8 @@ struct lln * lln_add_value (struct lln * parent, void * value) {
   return node;
 }
 
-bool lln_has (struct lln * list, struct lln * search) {
-  struct lln * current = list->start;
+bool lln_has (llnp list, llnp search) {
+  llnp current = list->start;
 
   while (current != 0) {
     if (current == search) return true;
@@ -50,8 +55,8 @@ bool lln_has (struct lln * list, struct lln * search) {
   return false;
 }
 
-bool lln_has_value (struct lln * list, void * value) {
-  struct lln * current = list->start;
+bool lln_has_value (llnp list, void * value) {
+  llnp current = list->start;
 
   while (current != 0) {
     if (current->value == value) return true;
@@ -60,8 +65,8 @@ bool lln_has_value (struct lln * list, void * value) {
   return false;
 }
 
-void lln_destroy (struct lln * list) {
-  struct lln * current = lln_get_tail(list);
+void lln_destroy (llnp list) {
+  llnp current = lln_get_tail(list);
 
   while (current != 0) {
     free(current);
@@ -69,11 +74,27 @@ void lln_destroy (struct lln * list) {
   }
 }
 
+/**Get the number of items in the linked list
+ * If linked list is null/0 this will return 0
+ * Otherwise it will loop through the list, returning the count
+ */
+int lln_get_size (llnp list) {
+  if (list == 0) return 0;
+  
+  llnp current = list->start;
+  int counter = 0;
+  while (current != 0) {
+    counter ++;
+    current = current->next;
+  }
+  return counter;
+}
+
 /**Iterate through the linked list with a callback function
  * node - a linked list node (usually the start aka tail)
  */
-int lln_iterate ( struct lln * node, void (*cb)() ) {
-  struct lln * cn = node->start;
+int lln_iterate ( llnp node, void (*cb)() ) {
+  llnp cn = node->start;
 
   int counter = 0;
 
