@@ -33,11 +33,11 @@ struct DynObj {
   bool propertyCountDirty;
 
   //set a value by its key (capable of runtime append)
-  bool (*set)(DynObjP obj, char * key, void * value);
+  bool (*set)(DynObjP obj, char * key, void * value, char valueType);
   //get a value by its key
-  void * (*get)(DynObjP obj, char * key);
+  KeyValuePairP (*get)(DynObjP obj, char * key);
 
-  void * (*getByHash)(DynObjP obj, int keyhash);
+  KeyValuePairP (*getByHash)(DynObjP obj, int keyhash);
 };
 
 /**Tests if obj is null
@@ -190,16 +190,16 @@ KeyValuePairP DynObj_getPropertyByKey (DynObjP obj, char * key) {
   );
 }
 
-void * DynObj_getByHash (DynObjP obj, int keyhash) {
-  KeyValuePairP pair = DynObj_getPropertyByHash(obj, keyhash);
-  if (pair == 0) return 0;
-  return pair->valuePointer;
+/**Alias of getPropertyByHash
+ */
+KeyValuePairP DynObj_getByHash (DynObjP obj, int keyhash) {
+  return DynObj_getPropertyByHash(obj, keyhash);
 }
 
-void * DynObj_get (DynObjP obj, char * key) {
-  KeyValuePairP pair = DynObj_getPropertyByKey(obj, key);
-  if (pair == 0) return 0;
-  return pair->valuePointer;
+/**Alias of getPropertyByKey
+ */
+KeyValuePairP DynObj_get (DynObjP obj, char * key) {
+  return DynObj_getPropertyByKey(obj, key);
 }
 
 /**Set a property on an object
@@ -208,14 +208,15 @@ void * DynObj_get (DynObjP obj, char * key) {
  * 
  * Returns false aka 0 if memory could not allocate for any reason
  */
-bool DynObj_set (DynObjP obj, char * key, void * value) {
+bool DynObj_set (DynObjP obj, char * key, void * value, char valueType) {
   if (DynObj_isNull(obj)) return false;
 
   KeyValuePairP pair = DynObj_getPropertyByKey(obj, key);
   if (pair == 0) {
     pair = KeyValuePair_create(
       DynObj_getHashForKey(key),
-      value
+      value,
+      valueType
     );
 
     //its possible _create ran out of memory

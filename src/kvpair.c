@@ -7,6 +7,8 @@ struct KeyValuePair {
   int keyHash;
   //a pointer to the value
   void * valuePointer;
+  //the type of value
+  char valueType;
 };
 
 //pointer to a key value pair, same as "struct KeyValuePair *"
@@ -15,11 +17,12 @@ struct KeyValuePair {
 /**Create a key value pair instance
  * Returns null if could not malloc
  */
-KeyValuePairP KeyValuePair_create (int keyHash, void * valuePointer) {
+KeyValuePairP KeyValuePair_create (int keyHash, void * valuePointer, char valueType) {
   KeyValuePairP result = malloc(sizeof(struct KeyValuePair));
   if (result == 0) return 0;
   result->keyHash = keyHash;
   result->valuePointer = valuePointer;
+  result->valueType = valueType;
   return result;
 }
 
