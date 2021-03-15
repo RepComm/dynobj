@@ -2,6 +2,15 @@
   "name": "dynobj",
   "dependencies": {},
   "files": [
-    "src/*"
+    "src/boolean.h",
+    "src/dynobj.json.c",
+    "src/jsonlexer.c",
+    "src/lexer.c",
+    "src/dynobj.c",
+    "src/hashedkeystore.c",
+    "src/kvpair.c",
+    "src/linkedlist.c",
+    "src/murmurhash/murmurhash.h",
+    "src/murmurhash/murmurhash.c"
   ]
 }
