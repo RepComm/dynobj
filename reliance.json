@@ -1,0 +1,7 @@
+{
+  "name": "dynobj",
+  "dependencies": {},
+  "files": [
+    "src/*"
+  ]
+}
